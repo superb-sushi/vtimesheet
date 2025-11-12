@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface TimeSlotProps {
+  current_day: number,
   day: string;
   time: string;
   isSelected: boolean;
@@ -8,6 +9,8 @@ interface TimeSlotProps {
   disabled?: boolean;
   onClick: () => void;
 }
+
+const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const VOLUNTEER_COLORS = [
   "hsl(210 60% 70%)",  // Soft Blue
@@ -26,15 +29,15 @@ const getVolunteerColor = (volunteer: string) => {
   return VOLUNTEER_COLORS[Math.abs(hash) % VOLUNTEER_COLORS.length];
 };
 
-const Timeslot = ({ day, time, isSelected, volunteers, disabled, onClick }: TimeSlotProps) => {
+const Timeslot = ({ current_day, day, time, isSelected, volunteers, disabled, onClick }: TimeSlotProps) => {
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "relative min-h-[80px] border-r border-b border-slot-border transition-colors",
+        `relative min-h-[80px] border-r border-b border-slot-border transition-colors ${current_day == DAYS.indexOf(day) ? "bg-zinc-100" : "" }`,
         "hover:bg-stone-100",
-        disabled && "cursor-not-allowed opacity-60 hover:bg-transparent",
+        disabled && "cursor-not-allowed opacity-60",
         !disabled && "cursor-pointer"
       )}
     >

@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model timeslots {
+  v_id       Int
+  date       DateTime   @db.Date
+  time       DateTime   @db.Timestamp(6)
+  volunteers volunteers @relation(fields: [v_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([v_id, date, time])
+}
+
+model volunteers {
+  id         Int         @id
+  first_name String?
+  last_name  String?
+  timeslots  timeslots[]
+}

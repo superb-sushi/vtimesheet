@@ -40,16 +40,18 @@ const WeeklySchedule = () => {
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [volunteerName, setVolunteerName] = useState("");
 
-  const obtainDateArr = (day: number, date: number, month: number) => {
+  const obtainDateArr = (day: number, date: number, month: number): string[] => {
     const getDiffDate = (diff: number) => {
-        return (date + diff).toString().padStart(2, '0') + "/" + month.toString().padStart(2, '0')
-    }
+      const base = new Date(year, month - 1, date);
+      base.setDate(base.getDate() + diff);
+      const dd = base.getDate().toString().padStart(2, "0");
+      const mm = (base.getMonth() + 1).toString().padStart(2, "0");
+      return `${dd}/${mm}`;
+    };
 
     const arr = [0, 1, 2, 3, 4, 5, 6];
-    console.log(day);
-    const temp = arr.map(num => num - day != 0 ? getDiffDate(num - day) : date.toString().padStart(2, '0') + "/" + month.toString().padStart(2, '0'))
-    return temp as string[];
-  }
+    return arr.map(num => getDiffDate(num - day));
+  };
 
   const handleSlotClick = (day: string, time: string) => {
     if (!volunteerName.trim()) {
@@ -133,15 +135,16 @@ const WeeklySchedule = () => {
                     <div key={`time-${time}`} className="px-2 py-0.5 text-right border-r border-b border-slot-border bg-muted/10">
                       <span className="text-xs font-medium text-time-label">{time.split(" - ")[0]}</span>
                     </div>
-                    {DAYS.map((day) => (
+                    {DAYS.map((d, id) => (
                       <Timeslot
-                        key={`${day}-${time}`}
-                        day={day}
+                        current_day={day}
+                        key={id}
+                        day={d}
                         time={time}
-                        isSelected={isSlotSelected(day, time)}
-                        volunteers={getVolunteersForSlot(day, time)}
+                        isSelected={isSlotSelected(d, time)}
+                        volunteers={getVolunteersForSlot(d, time)}
                         disabled={!volunteerName.trim()}
-                        onClick={() => handleSlotClick(day, time)}
+                        onClick={() => handleSlotClick(d, time)}
                       />
                     ))}
                   </>
