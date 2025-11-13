@@ -39,6 +39,42 @@ const WeeklySchedule = () => {
 
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [volunteerName, setVolunteerName] = useState("");
+  const [vFirstName, setVFirstName] = useState("");
+  const [vLastName, setVLastName] = useState("");
+  const [isExistingVolunteer, setIsExistingVolunteer] = useState<boolean>(false);
+
+  const handleFindVolunteer = async () => {
+    setVolunteerName(vFirstName + " " + vLastName);
+    const retrieveVolunteer = async () => {
+      try {
+        const first = encodeURIComponent(vFirstName.toLowerCase());
+        const last = encodeURIComponent(vLastName.toLowerCase());
+        const res = await fetch(`/api/get-volunteer?first=${first}&last=${last}`);
+        if (!res.ok) {
+          console.error('Failed to fetch volunteer:', res.status, res.statusText);
+          setIsExistingVolunteer(false);
+          return;
+        }
+        const data = await res.json();
+        // data is an array of volunteers — existing if length > 0
+        setIsExistingVolunteer(Array.isArray(data) && data.length > 0);
+      } catch (err) {
+        console.error('Error fetching volunteer:', err);
+        setIsExistingVolunteer(false);
+      }
+    }
+    await retrieveVolunteer();
+  }
+
+  const handleChangeFirstName = (input: string) => {
+    setVolunteerName("")
+    setVFirstName(input)
+  }
+
+  const handleChangeLastName = (input: string) => {
+    setVolunteerName("")
+    setVLastName(input)
+  }
 
   const obtainDateArr = (day: number, date: number, month: number): string[] => {
     const getDiffDate = (diff: number) => {
@@ -95,22 +131,46 @@ const WeeklySchedule = () => {
         </div>
 
         <Card className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 max-w-sm">
-              <input
-                id="volunteer-name"
-                type="text"
-                placeholder="Enter your name"
-                value={volunteerName}
-                onChange={(e) => setVolunteerName(e.target.value)}
-                className="w-full px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-              />
+          <div className="flex items-center justify-between">
+            <div className="flex gap-4">
+              <div className="flex max-w-sm gap-2">
+                <input
+                  id="volunteer-first-name"
+                  type="text"
+                  placeholder="Enter first name"
+                  value={vFirstName}
+                  onChange={(e) => handleChangeFirstName(e.target.value)}
+                  className="px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+                />
+                <input
+                  id="volunteer-last-name"
+                  type="text"
+                  placeholder="Enter last name"
+                  value={vLastName}
+                  onChange={(e) => handleChangeLastName(e.target.value)}
+                  className="px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+                />
+              </div>
+              {vFirstName && vLastName &&(
+                <Button onClick={handleFindVolunteer}>Confirm Volunteer</Button>
+              )}
             </div>
-            {volunteerName && (
-              <Badge variant="secondary" className="text-sm">
-                {totalHours} hours selected
-              </Badge>
-            )}
+            <div className="flex gap-2">
+              {vFirstName && vLastName && volunteerName && (
+                <Badge variant="secondary" className="text-sm">
+                  {totalHours} hours selected
+                </Badge>
+              )}
+              {vFirstName && vLastName && volunteerName && (
+                isExistingVolunteer 
+                ? <div className="inline-block px-3 py-1 text-sm font-semibold text-green-100 bg-green-700 border border-green-800 rounded-full shadow-sm">
+                    Registered
+                  </div> 
+                : <div className="cursor-pointer inline-block px-3 py-1 text-sm font-semibold text-red-100 bg-red-700 border border-red-800 rounded-full shadow-sm">
+                    Not Registered
+                  </div> 
+              )}
+            </div>
           </div>
         </Card>
 
