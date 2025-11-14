@@ -145,6 +145,26 @@ const WeeklySchedule = () => {
     return arr.map(num => getDiffDate(num - day));
   };
 
+  const deleteTimeslot = async (vid: number, date: Date, time: string) => {
+    try {
+      const res = await fetch("/api/delete-timeslot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          v_id: vid,
+          date: date,
+          timeslot: time,
+        }),
+      });
+      if (!res.ok) {
+        console.error('Failed to delete timeslot:', res.status, res.statusText);
+      }
+      setSelectedSlots(selectedSlots.filter((slot) => !(slot.date.toDateString() === date.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
+    } catch (err) {
+      console.error('Error deleting timeslot:', err);
+    }
+  }
+
   const handleSlotClick = (index: number, time: string) => {
     if (!volunteerName.trim()) {
       return;
@@ -167,7 +187,7 @@ const WeeklySchedule = () => {
       setNewSelectedSlots(newSelectedSlots.filter((slot) => !(slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
     } 
     else if (existingRegisteredSlot) {
-      console.log('found')
+      deleteTimeslot(vId, slotDate, time)
     } else {
       setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName }]);
     }
