@@ -18,6 +18,11 @@ interface SelectedSlot {
   v_name: string;
 }
 
+interface VolunteerCard {
+  v_name: string,
+  isOpen: boolean,
+}
+
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const TIME_SLOTS = [
   "8:00 - 10:00",
@@ -49,8 +54,15 @@ const WeeklySchedule = () => {
   const [isExistingVolunteer, setIsExistingVolunteer] = useState<boolean>(false);
   const [isLoadingReg, setIsLoadingReg] = useState<boolean>(false);
   const [vId, setVId] = useState<number>(0);
+  const [activeVolunteers, setActiveVolunteers] = useState<Array<VolunteerCard>>([]);
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+
+  const getActiveVolunteersThisWeek = () => {
+    return Array.from(new Set([...newSelectedSlots
+      .map((slot) => slot.v_name), ...selectedSlots
+      .map((slot) => slot.v_name)])); 
+  };
 
   const fetchTimeslots = async () => {
     const res = await fetch("/api/get-timeslots");
@@ -69,6 +81,12 @@ const WeeklySchedule = () => {
     setDate(today.getDate());
     setDay(today.getDay());
     fetchTimeslots();
+    const volunteerNameArr = getActiveVolunteersThisWeek()
+    const vCardArr = volunteerNameArr.map(v => ({
+      v_name: v, 
+      isOpen: false
+    }));
+    setActiveVolunteers(vCardArr);
   }, [])
 
   const handleFindVolunteer = async () => {
@@ -166,6 +184,12 @@ const WeeklySchedule = () => {
     } catch (err) {
       console.error('Error deleting timeslot:', err);
     }
+    const volunteerNameArr = getActiveVolunteersThisWeek()
+    const vCardArr = volunteerNameArr.map(v => ({
+      v_name: v, 
+      isOpen: false
+    }));
+    setActiveVolunteers(vCardArr);
   }
 
   const handleSlotClick = (index: number, time: string) => {
@@ -195,6 +219,12 @@ const WeeklySchedule = () => {
     } else {
       setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName }]);
     }
+    const volunteerNameArr = getActiveVolunteersThisWeek()
+    const vCardArr = volunteerNameArr.map(v => ({
+      v_name: v, 
+      isOpen: false
+    }));
+    setActiveVolunteers(vCardArr);
   };
 
   const isSlotRegistered = (index: number, timeslot: string) => {
@@ -367,7 +397,7 @@ const WeeklySchedule = () => {
                         time={time}
                         isSelected={isSlotSelected(id, time)}
                         volunteers={getVolunteersForSlot(id, time)}
-                        disabled={!volunteerName.trim() || (isSlotRegistered(id, time) && getVolunteersForSlot(id, time)[0].toLowerCase() != volunteerName.toLowerCase())}
+                        disabled={!volunteerName.trim()}
                         onClick={() => handleSlotClick(id, time)}
                       />
                     ))}

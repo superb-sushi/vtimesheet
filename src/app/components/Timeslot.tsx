@@ -46,7 +46,7 @@ const Timeslot = ({ current_day, day, time, isSelected, volunteers, disabled, on
           <div
             key={idx}
             className={cn(
-              "text-xs px-2 py-1 rounded text-white flex justify-center items-center font-medium truncate transition-all h-full",
+              "text-xs px-2 py-1 rounded text-white flex justify-center items-center font-medium truncate transition-all",
               isSelected && ""
             )}
             style={{ backgroundColor: getVolunteerColor(volunteer) }}
