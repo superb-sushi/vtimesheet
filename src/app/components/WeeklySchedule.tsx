@@ -28,6 +28,11 @@ const TIME_SLOTS = [
   "20:00 - 22:00",
 ];
 
+function capitalize(str: string) {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+}
+
 const WeeklySchedule = () => {
     
   const [year, setYear] = useState<number>(0);
@@ -67,7 +72,7 @@ const WeeklySchedule = () => {
 
   const handleFindVolunteer = async () => {
     setIsLoadingReg(true);
-    setVolunteerName(vFirstName + " " + vLastName);
+    setVolunteerName(capitalize(vFirstName) + " " + capitalize(vLastName));
     const retrieveVolunteer = async () => {
       try {
         const first = encodeURIComponent(vFirstName.toLowerCase());
@@ -150,12 +155,19 @@ const WeeklySchedule = () => {
     const dd = base.getDate();
     const slotDate = new Date(year, month - 1, dd);
 
-    const existingSlot = newSelectedSlots.find(
+    const existingNewSelectedSlot = newSelectedSlots.find(
       (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase()
     );
 
-    if (existingSlot) {
+    const existingRegisteredSlot = selectedSlots.find(
+      (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase()
+    );
+
+    if (existingNewSelectedSlot) {
       setNewSelectedSlots(newSelectedSlots.filter((slot) => !(slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
+    } 
+    else if (existingRegisteredSlot) {
+      console.log('found')
     } else {
       setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName }]);
     }
@@ -329,7 +341,7 @@ const WeeklySchedule = () => {
                         time={time}
                         isSelected={isSlotSelected(id, time)}
                         volunteers={getVolunteersForSlot(id, time)}
-                        disabled={!volunteerName.trim() || isSlotRegistered(id, time)}
+                        disabled={!volunteerName.trim() || (isSlotRegistered(id, time) && getVolunteersForSlot(id, time)[0].toLowerCase() != volunteerName.toLowerCase())}
                         onClick={() => handleSlotClick(id, time)}
                       />
                     ))}
