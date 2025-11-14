@@ -4,11 +4,11 @@ import prisma from "@/lib/prisma";
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { first_name, last_name } = body;
+    const { first_name, last_name, role } = body;
 
-    if (!first_name || !last_name) {
+    if (!first_name || !last_name || !role) {
       return NextResponse.json(
-        { error: "first_name and last_name are required" },
+        { error: "first_name, last_name and role are required" },
         { status: 400 }
       );
     }
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       data: {
         first_name,
         last_name,
+        role,
       },
     });
 

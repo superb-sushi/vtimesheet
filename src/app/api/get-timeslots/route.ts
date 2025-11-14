@@ -8,7 +8,8 @@ export async function GET() {
         volunteers: {
           select: {
             first_name: true,
-            last_name: true
+            last_name: true,
+            role: true,
           }
         }
       },
@@ -30,6 +31,7 @@ export async function GET() {
       date: t.date,
       timeslot: t.timeslot,
       v_name: `${capitalize(t.volunteers.first_name)} ${capitalize(t.volunteers.last_name)}`,
+      role: t.volunteers.role,
     }));
 
     return NextResponse.json(mapped, { status: 200 });

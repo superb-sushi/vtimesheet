@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { act, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Timeslot from "./Timeslot";
@@ -10,17 +10,25 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { toast } from "sonner";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 interface SelectedSlot {
   date: Date;
   timeslot: string;
   v_id: number;
   v_name: string;
+  role: string;
 }
 
 interface VolunteerCard {
   v_name: string,
   isOpen: boolean,
+  role: string,
 }
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -51,6 +59,7 @@ const WeeklySchedule = () => {
   const [volunteerName, setVolunteerName] = useState("");
   const [vFirstName, setVFirstName] = useState("");
   const [vLastName, setVLastName] = useState("");
+  const [vRole, setVRole] = useState("");
   const [isExistingVolunteer, setIsExistingVolunteer] = useState<boolean>(false);
   const [isLoadingReg, setIsLoadingReg] = useState<boolean>(false);
   const [vId, setVId] = useState<number>(0);
@@ -58,20 +67,27 @@ const WeeklySchedule = () => {
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
-  const getActiveVolunteersThisWeek = () => {
-    return Array.from(new Set([...newSelectedSlots
-      .map((slot) => slot.v_name), ...selectedSlots
-      .map((slot) => slot.v_name)])); 
-  };
-
   const fetchTimeslots = async () => {
     const res = await fetch("/api/get-timeslots");
     const data = await res.json();
-    const formattedSlots = data.map((item: { v_id: number, date: string, timeslot: string, v_name: string }) => ({
+    const formattedSlots = data.map((item: { v_id: number, date: string, timeslot: string, v_name: string, role: string }) => ({
       ...item,
       date: new Date(item.date),
     }));
     setSelectedSlots(formattedSlots as SelectedSlot[]);
+    const vCardArr = Array.from(
+      new Set<string>(
+        formattedSlots.map(
+          (v: { v_id: number; date: Date; timeslot: string; v_name: string; role: string }) =>
+            `${v.v_name}|${v.role}`
+        )
+      )
+    ).map((key) => {
+      const [v_name, role] = key.split("|");
+      return { v_name, role, isOpen: false };
+    });
+
+    setActiveVolunteers(vCardArr);
   }
 
   useEffect(() => {
@@ -81,12 +97,6 @@ const WeeklySchedule = () => {
     setDate(today.getDate());
     setDay(today.getDay());
     fetchTimeslots();
-    const volunteerNameArr = getActiveVolunteersThisWeek()
-    const vCardArr = volunteerNameArr.map(v => ({
-      v_name: v, 
-      isOpen: false
-    }));
-    setActiveVolunteers(vCardArr);
   }, [])
 
   const handleFindVolunteer = async () => {
@@ -106,6 +116,7 @@ const WeeklySchedule = () => {
         // data is an array of volunteers — existing if length > 0
         setIsExistingVolunteer(Array.isArray(data) && data.length > 0);
         setVId(data[0].id);
+        setVRole(data[0].role);
         toast.success(`Selecting slots now for ${capitalize(vFirstName) + " " + capitalize(vLastName)}!`);
       } catch (err) {
         console.error('Error fetching volunteer:', err);
@@ -136,6 +147,7 @@ const WeeklySchedule = () => {
         body: JSON.stringify({
           first_name: vFirstName.toLowerCase(),
           last_name: vLastName.toLowerCase(),
+          role: 'volunteer',
         }),
       });
       if (!res.ok) {
@@ -181,15 +193,33 @@ const WeeklySchedule = () => {
         console.error('Failed to delete timeslot:', res.status, res.statusText);
       }
       setSelectedSlots(selectedSlots.filter((slot) => !(slot.date.toDateString() === date.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
+      const vCardArr = Array.from(
+        new Set([
+          // newSelectedSlots
+          ...newSelectedSlots.map((slot) => `${slot.v_name}|${slot.role}`),
+
+          // selectedSlots filtered (exclude the one being removed)
+          ...selectedSlots
+            .filter(
+              (slot) =>
+                !(
+                  slot.date.toDateString() === date.toDateString() &&
+                  slot.timeslot === time &&
+                  slot.v_id === vId &&
+                  slot.v_name.toLowerCase() === volunteerName.toLowerCase()
+                )
+            )
+            .map((slot) => `${slot.v_name}|${slot.role}`)
+        ])
+      ).map((key) => {
+        const [v_name, role] = key.split("|");
+        return { v_name, role, isOpen: false };
+      });
+      console.log(vCardArr);
+      setActiveVolunteers(vCardArr);
     } catch (err) {
       console.error('Error deleting timeslot:', err);
     }
-    const volunteerNameArr = getActiveVolunteersThisWeek()
-    const vCardArr = volunteerNameArr.map(v => ({
-      v_name: v, 
-      isOpen: false
-    }));
-    setActiveVolunteers(vCardArr);
   }
 
   const handleSlotClick = (index: number, time: string) => {
@@ -212,19 +242,12 @@ const WeeklySchedule = () => {
 
     if (existingNewSelectedSlot) {
       setNewSelectedSlots(newSelectedSlots.filter((slot) => !(slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
-    } 
-    else if (existingRegisteredSlot) {
+    } else if (existingRegisteredSlot) {
       deleteTimeslot(vId, slotDate, time)
       toast.success("Time slot has been permanently deleted!")
     } else {
-      setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName }]);
+      setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole}]);
     }
-    const volunteerNameArr = getActiveVolunteersThisWeek()
-    const vCardArr = volunteerNameArr.map(v => ({
-      v_name: v, 
-      isOpen: false
-    }));
-    setActiveVolunteers(vCardArr);
   };
 
   const isSlotRegistered = (index: number, timeslot: string) => {
@@ -259,7 +282,15 @@ const WeeklySchedule = () => {
       .map((slot) => slot.v_name)])); 
   };
 
-  const totalHours = (selectedSlots.filter((slot) => slot.v_id === vId).length + newSelectedSlots.filter(slot => slot.v_id == vId).length )* 2;
+  const getVolunteerHours = (name: string) => {
+    return selectedSlots.filter(slot => slot.v_name.toLowerCase() === name.toLowerCase()).length * 2;
+  };
+
+  const toggleVolunteerCard = (name: string) => {
+    setActiveVolunteers(activeVolunteers.map(v => 
+      v.v_name === name ? { ...v, isOpen: !v.isOpen } : v
+    ));
+  };
 
   const handleRegisterTimeslots = () => {
     const registerTimeslot = async (vid: number, date: Date, time: string) => {
@@ -276,7 +307,24 @@ const WeeklySchedule = () => {
         if (!res.ok) {
           console.error('Failed to register timeslot:', res.status, res.statusText);
         }
-        setSelectedSlots([...selectedSlots, { date: date, timeslot: time, v_id: vId, v_name: volunteerName }]);
+        setSelectedSlots([...selectedSlots, { date: date, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole }]);
+        const vCardArr = Array.from(
+          new Set([
+            // newSelectedSlots
+            ...newSelectedSlots.map((slot) => `${slot.v_name}|${slot.role}`),
+
+            // selectedSlots + newly added slot
+            ...[
+              ...selectedSlots,
+              { date, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole }
+            ].map((slot) => `${slot.v_name}|${slot.role}`)
+          ])
+        ).map((key) => {
+          const [v_name, role] = key.split("|");
+          return { v_name, role, isOpen: false };
+        });
+        console.log(vCardArr);
+        setActiveVolunteers(vCardArr);
       } catch (err) {
         console.error('Error registering timeslot:', err);
       }
@@ -334,7 +382,7 @@ const WeeklySchedule = () => {
             <div className="flex gap-2">
               {vFirstName && vLastName && volunteerName && (
                 <Badge variant="secondary" className="text-sm">
-                  {totalHours} hours selected
+                  {getVolunteerHours(volunteerName)} hours selected
                 </Badge>
               )}
               {vFirstName && vLastName && volunteerName && (
@@ -366,6 +414,52 @@ const WeeklySchedule = () => {
               )}
             </div>
           </div>
+          {activeVolunteers.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-muted-foreground">Active Volunteers</p>
+                <div className="space-y-2">
+                  {activeVolunteers.map((vCard) => (
+                    <Collapsible
+                      key={vCard.v_name}
+                      open={vCard.isOpen}
+                      onOpenChange={() => toggleVolunteerCard(vCard.v_name)}
+                    >
+                      <Card className="p-3">
+                        <CollapsibleTrigger className="flex items-center justify-between w-full">
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm font-medium">{vCard.v_name}</div>
+                            <Badge variant="outline" className="text-xs">{capitalize(vCard.role)}</Badge>
+                          </div>
+                          {vCard.isOpen ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="mt-[-10px] pt-3 border-t">
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Cumulative Hours:</span>
+                              <span className="font-medium">{getVolunteerHours(vCard.v_name)} hours</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Shifts This Week:</span>
+                              <span className="font-medium">
+                                {selectedSlots.filter(slot => slot.v_name.toLowerCase() === vCard.v_name.toLowerCase()).length} shifts
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Role:</span>
+                              <span className="font-medium">{capitalize(vCard.role)}</span>
+                            </div>
+                          </div>
+                        </CollapsibleContent>
+                      </Card>
+                    </Collapsible>
+                  ))}
+                </div>
+              </div>
+            )}
         </Card>
 
         <div className="bg-white">

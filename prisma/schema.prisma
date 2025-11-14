@@ -22,4 +22,5 @@ model volunteers {
   first_name String
   last_name  String
   timeslots  timeslots[]
+  role       String @default("volunteer")
 }
