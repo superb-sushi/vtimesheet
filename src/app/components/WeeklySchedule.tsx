@@ -9,6 +9,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { toast } from "sonner";
 
 interface SelectedSlot {
   date: Date;
@@ -51,22 +52,22 @@ const WeeklySchedule = () => {
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
+  const fetchTimeslots = async () => {
+    const res = await fetch("/api/get-timeslots");
+    const data = await res.json();
+    const formattedSlots = data.map((item: { v_id: number, date: string, timeslot: string, v_name: string }) => ({
+      ...item,
+      date: new Date(item.date),
+    }));
+    setSelectedSlots(formattedSlots as SelectedSlot[]);
+  }
+
   useEffect(() => {
     const today: Date = new Date();
     setYear(today.getFullYear());
     setMonth(today.getMonth() + 1); 
     setDate(today.getDate());
     setDay(today.getDay());
-
-    const fetchTimeslots = async () => {
-      const res = await fetch("/api/get-timeslots");
-      const data = await res.json();
-      const formattedSlots = data.map((item: { v_id: number, date: string, timeslot: string, v_name: string }) => ({
-        ...item,
-        date: new Date(item.date),
-      }));
-      setSelectedSlots(formattedSlots as SelectedSlot[]);
-    }
     fetchTimeslots();
   }, [])
 
@@ -87,9 +88,11 @@ const WeeklySchedule = () => {
         // data is an array of volunteers — existing if length > 0
         setIsExistingVolunteer(Array.isArray(data) && data.length > 0);
         setVId(data[0].id);
+        toast.success(`Selecting slots now for ${capitalize(vFirstName) + " " + capitalize(vLastName)}!`);
       } catch (err) {
         console.error('Error fetching volunteer:', err);
         setIsExistingVolunteer(false);
+        toast.error(`${capitalize(vFirstName) + " " + capitalize(vLastName)} is not in the system! Click on the 'Not Registered' badge to register them immediately!`);
       }
     }
     await retrieveVolunteer();
@@ -188,6 +191,7 @@ const WeeklySchedule = () => {
     } 
     else if (existingRegisteredSlot) {
       deleteTimeslot(vId, slotDate, time)
+      toast.success("Time slot has been permanently deleted!")
     } else {
       setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName }]);
     }
@@ -258,6 +262,8 @@ const WeeklySchedule = () => {
     setIsUpdating(true);
     registerAllSlots();
     setIsUpdating(false);
+    toast.success("All new timeslots have been registered!")
+    fetchTimeslots();
   }
 
   return (
