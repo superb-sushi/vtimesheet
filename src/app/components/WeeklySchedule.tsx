@@ -15,7 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { ChevronDown, ChevronUp, LogIn, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LogIn, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,34 +83,70 @@ const WeeklySchedule = () => {
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
+  const [weekOffset, setWeekOffset] = useState(0);
+
   const fetchTimeslots = async () => {
     const res = await fetch("/api/get-timeslots");
     const data = await res.json();
-    const formattedSlots = data.map((item: { v_id: number, date: string, timeslot: string, v_name: string, role: string }) => ({
-      ...item,
-      date: new Date(item.date),
-    }));
-    setSelectedSlots(formattedSlots as SelectedSlot[]);
-    const vCardArr = Array.from(
-      new Set<string>(
-        formattedSlots.map(
-          (v: { v_id: number; date: Date; timeslot: string; v_name: string; role: string }) =>
-            `${v.v_name}|${v.role}`
-        )
-      )
-    ).map((key) => {
-      const [v_name, role] = key.split("|");
-      return { v_name, role, isOpen: false };
-    });
 
-    setActiveVolunteers(vCardArr);
-  }
+    // 1. Convert ("YYYY-MM-DD" → Date)
+    const formattedSlots = data.map(
+      (item: {
+        v_id: number;
+        date: string;
+        timeslot: string;
+        v_name: string;
+        role: string;
+      }) => ({
+        ...item,
+        date: new Date(item.date),
+      })
+    );
+
+    // 2. selectedSlots should contain ALL slots
+    setSelectedSlots(formattedSlots as SelectedSlot[]);
+  };
 
   const fetchAllVolunteers = async () => {
     const res = await fetch("/api/get-all-volunteers");
     const data = await res.json();
     setAllRegisteredVolunteers(data as Volunteer[]);
   }
+
+  const getActiveVolunteersForWeek = (slots: SelectedSlot[], offset: number) => {
+    const year = new Date().getFullYear();
+
+    // 1. Compute valid dates for the week
+    const validDates = new Set(
+      getWeekDateRange(offset).dateArr.map((d) => {
+        const [dd, mm] = d.split("/");
+        return `${year}-${mm}-${dd}`;
+      })
+    );
+
+    // 2. Filter slots for this week
+    const filteredForWeek = slots.filter((slot) => {
+      const slotDateStr = slot.date.toISOString().split("T")[0]; // "YYYY-MM-DD"
+      return validDates.has(slotDateStr);
+    });
+
+    // 3. Map to activeVolunteers
+    const vCardArr = Array.from(
+      new Set(
+        filteredForWeek.map((v) => `${v.v_name}|${v.role}`)
+      )
+    ).map((key) => {
+      const [v_name, role] = key.split("|");
+      return { v_name, role, isOpen: false };
+    });
+
+    return vCardArr;
+  };
+
+  useEffect(() => {
+    const vCards = getActiveVolunteersForWeek(selectedSlots, weekOffset);
+    setActiveVolunteers(vCards);
+  }, [selectedSlots, weekOffset]);
 
   useEffect(() => {
     const today: Date = new Date();
@@ -189,19 +225,6 @@ const WeeklySchedule = () => {
     }
   }
 
-  const obtainDateArr = (day: number, date: number, month: number): string[] => {
-    const getDiffDate = (diff: number) => {
-      const base = new Date(year, month - 1, date);
-      base.setDate(base.getDate() + diff);
-      const dd = base.getDate().toString().padStart(2, "0");
-      const mm = (base.getMonth() + 1).toString().padStart(2, "0");
-      return `${dd}/${mm}`;
-    };
-
-    const arr = [0, 1, 2, 3, 4, 5, 6];
-    return arr.map(num => getDiffDate(num - day));
-  };
-
   const deleteTimeslot = async (vid: number, date: Date, time: string) => {
     try {
       const res = await fetch("/api/delete-timeslot", {
@@ -217,30 +240,6 @@ const WeeklySchedule = () => {
         console.error('Failed to delete timeslot:', res.status, res.statusText);
       }
       setSelectedSlots(selectedSlots.filter((slot) => !(slot.date.toDateString() === date.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
-      const vCardArr = Array.from(
-        new Set([
-          // newSelectedSlots
-          ...newSelectedSlots.map((slot) => `${slot.v_name}|${slot.role}`),
-
-          // selectedSlots filtered (exclude the one being removed)
-          ...selectedSlots
-            .filter(
-              (slot) =>
-                !(
-                  slot.date.toDateString() === date.toDateString() &&
-                  slot.timeslot === time &&
-                  slot.v_id === vId &&
-                  slot.v_name.toLowerCase() === volunteerName.toLowerCase()
-                )
-            )
-            .map((slot) => `${slot.v_name}|${slot.role}`)
-        ])
-      ).map((key) => {
-        const [v_name, role] = key.split("|");
-        return { v_name, role, isOpen: false };
-      });
-      console.log(vCardArr);
-      setActiveVolunteers(vCardArr);
     } catch (err) {
       console.error('Error deleting timeslot:', err);
     }
@@ -251,26 +250,64 @@ const WeeklySchedule = () => {
       return;
     }
 
-    const base = new Date(year, month - 1, date);
-    base.setDate(base.getDate() + index - day);
-    const dd = base.getDate();
-    const slotDate = new Date(year, month - 1, dd);
+    // 1. Compute the Sunday of the current week (weekOffset-aware)
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + (weekOffset * 7));
 
+    // 2. Compute the slot's actual date for the clicked index
+    const slotDate = new Date(startOfWeek);
+    slotDate.setDate(startOfWeek.getDate() + index); // 0–6
+
+    // 3. Check if user already added this slot in new selections
     const existingNewSelectedSlot = newSelectedSlots.find(
-      (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase()
+      (slot) =>
+        slot.date.toDateString() === slotDate.toDateString() &&
+        slot.timeslot === time &&
+        slot.v_id === vId &&
+        slot.v_name.toLowerCase() === volunteerName.toLowerCase()
     );
 
+    // 4. Check if slot exists in database (registered slots)
     const existingRegisteredSlot = selectedSlots.find(
-      (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase()
+      (slot) =>
+        slot.date.toDateString() === slotDate.toDateString() &&
+        slot.timeslot === time &&
+        slot.v_id === vId &&
+        slot.v_name.toLowerCase() === volunteerName.toLowerCase()
     );
 
+    // 5. If user already added it → remove from newSelectedSlots
     if (existingNewSelectedSlot) {
-      setNewSelectedSlots(newSelectedSlots.filter((slot) => !(slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === time && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase())));
-    } else if (existingRegisteredSlot) {
-      deleteTimeslot(vId, slotDate, time)
-      toast.success("Time slot has been permanently deleted!")
-    } else {
-      setNewSelectedSlots([...newSelectedSlots, { date: slotDate, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole}]);
+      setNewSelectedSlots(
+        newSelectedSlots.filter(
+          (slot) =>
+            !(
+              slot.date.toDateString() === slotDate.toDateString() &&
+              slot.timeslot === time &&
+              slot.v_id === vId &&
+              slot.v_name.toLowerCase() === volunteerName.toLowerCase()
+            )
+        )
+      );
+    }
+    // 6. If it exists in DB → permanently delete
+    else if (existingRegisteredSlot) {
+      deleteTimeslot(vId, slotDate, time);
+      toast.success("Time slot has been permanently deleted!");
+    }
+    // 7. Otherwise → add new timeslot (pending)
+    else {
+      setNewSelectedSlots([
+        ...newSelectedSlots,
+        {
+          date: slotDate,
+          timeslot: time,
+          v_id: vId,
+          v_name: volunteerName,
+          role: vRole,
+        },
+      ]);
     }
   };
 
@@ -294,20 +331,57 @@ const WeeklySchedule = () => {
     );
   };
 
+  function formatDateLocal(date: Date) {
+    const yyyy = date.getFullYear();
+    const mm = (date.getMonth() + 1).toString().padStart(2, "0"); // Month 0-indexed
+    const dd = date.getDate().toString().padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
   const getVolunteersForSlot = (index: number, timeslot: string) => {
-    const base = new Date(year, month - 1, date);
-    base.setDate(base.getDate() + index - day);
-    const dd = base.getDate();
-    const slotDate = new Date(year, month - 1, dd);
-    return Array.from(new Set([...newSelectedSlots
-      .filter((slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === timeslot)
-      .map((slot) => slot.v_name), ...selectedSlots
-      .filter((slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === timeslot)
-      .map((slot) => slot.v_name)])); 
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + weekOffset * 7);
+
+    const slotDate = new Date(startOfWeek);
+    slotDate.setDate(startOfWeek.getDate() + index);
+
+    const slotKey = formatDateLocal(slotDate);
+
+    const allSlots = [...selectedSlots, ...newSelectedSlots];
+
+    return Array.from(
+      new Set(
+        allSlots
+          .filter(slot => slot.timeslot === timeslot && formatDateLocal(slot.date) === slotKey)
+          .map(slot => slot.v_name)
+      )
+    )
   };
 
-  const getVolunteerHours = (name: string) => {
-    return selectedSlots.filter(slot => slot.v_name.toLowerCase() === name.toLowerCase()).length * 2;
+
+  const getVolunteerStats = (name: string) => {
+    const { dateArr } = getWeekDateRange(weekOffset); // current week
+    const year = new Date().getFullYear();
+
+    // Convert "DD/MM" → "YYYY-MM-DD" for comparison
+    const weekDates = new Set(
+      dateArr.map(d => {
+        const [dd, mm] = d.split("/");
+        return `${year}-${mm}-${dd}`;
+      })
+    );
+
+    const shiftsThisWeek = selectedSlots.filter(
+      slot =>
+        slot.v_name.toLowerCase() === name.toLowerCase() &&
+        weekDates.has(formatDateLocal(slot.date))
+    );
+
+    return {
+      hours: shiftsThisWeek.length * 2, // assuming each shift = 2 hours
+      shifts: shiftsThisWeek.length
+    };
   };
 
   const toggleVolunteerCard = (name: string) => {
@@ -331,22 +405,6 @@ const WeeklySchedule = () => {
         if (!res.ok) {
           console.error('Failed to register timeslot:', res.status, res.statusText);
         }
-        const vCardArr = Array.from(
-          new Set([
-            // newSelectedSlots
-            ...newSelectedSlots.map((slot) => `${slot.v_name}|${slot.role}`),
-
-            // selectedSlots + newly added slot
-            ...[
-              ...selectedSlots,
-              { date, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole }
-            ].map((slot) => `${slot.v_name}|${slot.role}`)
-          ])
-        ).map((key) => {
-          const [v_name, role] = key.split("|");
-          return { v_name, role, isOpen: false };
-        });
-        setActiveVolunteers(vCardArr);
       } catch (err) {
         console.error('Error registering timeslot:', err);
       }
@@ -360,11 +418,10 @@ const WeeklySchedule = () => {
     }
     setIsUpdating(true);
     registerAllSlots();
+    setSelectedSlots(prev => [...prev, ...newSelectedSlots])
     setIsUpdating(false);
-    setSelectedSlots([...selectedSlots, ...newSelectedSlots])
     toast.success("All new timeslots have been registered!")
     setNewSelectedSlots([]);
-    fetchTimeslots();
   }
 
   const handleSelectRegVolunteer = (vol: Volunteer) => {
@@ -374,6 +431,45 @@ const WeeklySchedule = () => {
     retrieveVolunteer(vol.first_name, vol.last_name);
   }
 
+  const obtainDateArr = (day: number, date: number, month: number, year: number): string[] => {
+    const getDiffDate = (diff: number) => {
+      const base = new Date(year, month - 1, date);
+      base.setDate(base.getDate() + diff);
+      const dd = base.getDate().toString().padStart(2, "0");
+      const mm = (base.getMonth() + 1).toString().padStart(2, "0");
+      return `${dd}/${mm}`;
+    };
+
+    const arr = [0, 1, 2, 3, 4, 5, 6];
+    return arr.map(num => getDiffDate(num - day));
+  };
+
+  const getWeekDateRange = (weekOffset: number = 0) => {
+    const today = new Date();
+
+    // Start of week: SUNDAY
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay() + (weekOffset * 7));
+
+    // End of week: SATURDAY
+    const saturday = new Date(sunday);
+    saturday.setDate(sunday.getDate() + 6);
+
+    // Build the readable date range string
+    const range = `${sunday.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${saturday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+
+    // Build the 7-day date array using your logic
+    const dateArr = obtainDateArr(
+      sunday.getDay(),        // 0 since it's Sunday (always)
+      sunday.getDate(),
+      sunday.getMonth() + 1,
+      sunday.getFullYear()
+    );
+
+    return { range, dateArr };
+  };
+
+
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto space-y-4">
@@ -381,6 +477,26 @@ const WeeklySchedule = () => {
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Volunteer Schedule</h1>
             <p className="text-sm text-muted-foreground">Click on time slots to add your availability</p>
+          </div>
+
+           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setWeekOffset(weekOffset - 1)}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-sm font-medium min-w-[200px] text-center">
+              {getWeekDateRange(weekOffset).range}
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setWeekOffset(weekOffset + 1)}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
@@ -433,7 +549,7 @@ const WeeklySchedule = () => {
             <div className="flex gap-2">
               {vFirstName && vLastName && volunteerName && (
                 <Badge variant="secondary" className="text-sm">
-                  {getVolunteerHours(volunteerName)} hours selected
+                  {getVolunteerStats(volunteerName).hours} hours selected
                 </Badge>
               )}
               {vFirstName && vLastName && volunteerName && (
@@ -491,12 +607,12 @@ const WeeklySchedule = () => {
                           <div className="space-y-2 text-sm">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Cumulative Hours:</span>
-                              <span className="font-medium">{getVolunteerHours(vCard.v_name)} hours</span>
+                              <span className="font-medium">{getVolunteerStats(vCard.v_name).hours} hours</span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Shifts This Week:</span>
                               <span className="font-medium">
-                                {selectedSlots.filter(slot => slot.v_name.toLowerCase() === vCard.v_name.toLowerCase()).length} shifts
+                                {getVolunteerStats(vCard.v_name).shifts} shifts
                               </span>
                             </div>
                             <div className="flex justify-between">
@@ -522,7 +638,7 @@ const WeeklySchedule = () => {
                 {DAYS.map((d, id) => (
                   <div key={d} className="p-3 text-center border-r border-slot-border last:border-r-0">
                     <div className="text-xs font-medium text-muted-foreground uppercase">{d.slice(0, 3)}</div>
-                    <div className="text-sm font-semibold text-foreground">{obtainDateArr(day, date!, month!)[id]}</div>
+                    <div className="text-sm font-semibold text-foreground">{getWeekDateRange(weekOffset).dateArr[id]}</div>
                   </div>
                 ))}
               </div>
