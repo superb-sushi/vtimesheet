@@ -307,7 +307,6 @@ const WeeklySchedule = () => {
         if (!res.ok) {
           console.error('Failed to register timeslot:', res.status, res.statusText);
         }
-        setSelectedSlots([...selectedSlots, { date: date, timeslot: time, v_id: vId, v_name: volunteerName, role: vRole }]);
         const vCardArr = Array.from(
           new Set([
             // newSelectedSlots
@@ -323,7 +322,6 @@ const WeeklySchedule = () => {
           const [v_name, role] = key.split("|");
           return { v_name, role, isOpen: false };
         });
-        console.log(vCardArr);
         setActiveVolunteers(vCardArr);
       } catch (err) {
         console.error('Error registering timeslot:', err);
@@ -335,12 +333,13 @@ const WeeklySchedule = () => {
           registerTimeslot(slot.v_id, slot.date, slot.timeslot)
         )
       );
-      setNewSelectedSlots([]);
     }
     setIsUpdating(true);
     registerAllSlots();
     setIsUpdating(false);
+    setSelectedSlots([...selectedSlots, ...newSelectedSlots])
     toast.success("All new timeslots have been registered!")
+    setNewSelectedSlots([]);
     fetchTimeslots();
   }
 
