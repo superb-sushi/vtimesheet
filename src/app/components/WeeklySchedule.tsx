@@ -15,7 +15,15 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronUp, LogIn, Search } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface SelectedSlot {
   date: Date;
@@ -28,6 +36,13 @@ interface SelectedSlot {
 interface VolunteerCard {
   v_name: string,
   isOpen: boolean,
+  role: string,
+}
+
+interface Volunteer {
+  id: number,
+  first_name: string,
+  last_name: string,
   role: string,
 }
 
@@ -64,6 +79,7 @@ const WeeklySchedule = () => {
   const [isLoadingReg, setIsLoadingReg] = useState<boolean>(false);
   const [vId, setVId] = useState<number>(0);
   const [activeVolunteers, setActiveVolunteers] = useState<Array<VolunteerCard>>([]);
+  const [allRegisteredVolunteers, setAllRegisteredVolunteers] = useState<Volunteer[]>([]);
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
@@ -90,6 +106,12 @@ const WeeklySchedule = () => {
     setActiveVolunteers(vCardArr);
   }
 
+  const fetchAllVolunteers = async () => {
+    const res = await fetch("/api/get-all-volunteers");
+    const data = await res.json();
+    setAllRegisteredVolunteers(data as Volunteer[]);
+  }
+
   useEffect(() => {
     const today: Date = new Date();
     setYear(today.getFullYear());
@@ -97,12 +119,10 @@ const WeeklySchedule = () => {
     setDate(today.getDate());
     setDay(today.getDay());
     fetchTimeslots();
+    fetchAllVolunteers();
   }, [])
 
-  const handleFindVolunteer = async () => {
-    setIsLoadingReg(true);
-    setVolunteerName(capitalize(vFirstName) + " " + capitalize(vLastName));
-    const retrieveVolunteer = async () => {
+  const retrieveVolunteer = async (vFirstName: string, vLastName: string) => {
       try {
         const first = encodeURIComponent(vFirstName.toLowerCase());
         const last = encodeURIComponent(vLastName.toLowerCase());
@@ -124,7 +144,11 @@ const WeeklySchedule = () => {
         toast.error(`${capitalize(vFirstName) + " " + capitalize(vLastName)} is not in the system! Click on the 'Not Registered' badge to register them immediately!`);
       }
     }
-    await retrieveVolunteer();
+
+  const handleFindVolunteer = async () => {
+    setIsLoadingReg(true);
+    setVolunteerName(capitalize(vFirstName) + " " + capitalize(vLastName));
+    await retrieveVolunteer(vFirstName, vLastName);
     setIsLoadingReg(false);
   }
 
@@ -343,6 +367,13 @@ const WeeklySchedule = () => {
     fetchTimeslots();
   }
 
+  const handleSelectRegVolunteer = (vol: Volunteer) => {
+    handleChangeFirstName(capitalize(vol.first_name));
+    handleChangeLastName(capitalize(vol.last_name));
+    setVolunteerName(`${capitalize(vol.first_name)} ${capitalize(vol.last_name)}`)
+    retrieveVolunteer(vol.first_name, vol.last_name);
+  }
+
   return (
     <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-[1400px] mx-auto space-y-4">
@@ -355,15 +386,34 @@ const WeeklySchedule = () => {
 
         <Card className="p-4">
           <div className="flex items-center justify-between">
-            <div className="flex gap-4">
+            <div className="flex gap-2 justify-start">
               <div className="flex max-w-sm gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger>
+                    <Button variant={'outline'} size='icon'>
+                      <ChevronDown />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent>
+                    <DropdownMenuLabel>Registered Users</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <div className="max-h-sm min-w-3xs overflow-y-scroll">
+                    {allRegisteredVolunteers.map((vol, id) => (
+                        <DropdownMenuItem key={id} className="flex justify-between" onClick={() => handleSelectRegVolunteer(vol)}>
+                          {capitalize(vol.first_name)} {capitalize(vol.last_name)}
+                          <Badge variant="outline" className="text-xs">{capitalize(vol.role)}</Badge>
+                        </DropdownMenuItem>
+                    ))}
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <input
                   id="volunteer-first-name"
                   type="text"
                   placeholder="Enter first name"
                   value={vFirstName}
                   onChange={(e) => handleChangeFirstName(e.target.value)}
-                  className="px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+                  className="max-w-[150px] px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                 />
                 <input
                   id="volunteer-last-name"
@@ -371,11 +421,13 @@ const WeeklySchedule = () => {
                   placeholder="Enter last name"
                   value={vLastName}
                   onChange={(e) => handleChangeLastName(e.target.value)}
-                  className="px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
+                  className="max-w-[150px] px-3 py-2 text-sm rounded-md border border-input bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
                 />
               </div>
               {vFirstName && vLastName &&(
-                <Button onClick={handleFindVolunteer}>Confirm Volunteer</Button>
+                <Button onClick={handleFindVolunteer} size={'icon'} disabled={`${vFirstName} ${vLastName}`.toLowerCase() == volunteerName.toLowerCase()}>
+                  <Search />
+                </Button>
               )}
             </div>
             <div className="flex gap-2">
