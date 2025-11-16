@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Timeslot from "./Timeslot";
@@ -15,7 +15,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, LogIn, Search } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, LogIn, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,7 +23,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@/components/ui/dropdown-menu";
+import { domToPng } from "modern-screenshot";
 
 interface SelectedSlot {
   date: Date;
@@ -77,6 +78,8 @@ const WeeklySchedule = () => {
   const [vId, setVId] = useState<number>(0);
   const [activeVolunteers, setActiveVolunteers] = useState<Array<VolunteerCard>>([]);
   const [allRegisteredVolunteers, setAllRegisteredVolunteers] = useState<Volunteer[]>([]);
+
+  const scheduleRef = useRef<HTMLDivElement>(null);
 
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
@@ -456,6 +459,43 @@ const WeeklySchedule = () => {
     return { range, dateArr };
   };
 
+  const [isExportingPic, setIsExportingPic] = useState<boolean>(false);
+
+  const handleExportSchedule = async () => {
+
+    if (!scheduleRef.current) return;
+    setIsExportingPic(true);
+    try {
+      toast.info("Generating schedule image...");
+      const dataUrl = await domToPng(scheduleRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+      });
+      
+      const link = document.createElement("a");
+      link.download = `volunteer-schedule-${getWeekDateRange().range.replace(/\s+/g, "")}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.success("Schedule exported successfully!");
+    } catch (error) {
+      toast.error("Failed to export schedule");
+      console.error("Export error:", error);
+    } finally {
+      setIsExportingPic(false)
+      // Fix Windows taskbar being stuck after screenshot
+      setTimeout(() => {
+        // 1. Force a tiny window resize (even if size doesn't change)
+        window.dispatchEvent(new Event('resize'));
+
+        // 2. Force repaint
+        document.body.style.transform = 'translateZ(0)';
+        requestAnimationFrame(() => {
+          document.body.style.transform = '';
+        });
+      }, 50);
+    }
+  };
 
   return (
     <div className="min-h-screen p-4 md:p-8">
@@ -465,25 +505,35 @@ const WeeklySchedule = () => {
             <h1 className="text-2xl font-semibold text-foreground">Volunteer Schedule</h1>
             <p className="text-sm text-muted-foreground">Click on time slots to add your availability</p>
           </div>
-
-           <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setWeekOffset(weekOffset - 1)}
+                variant="outline"
+                size="sm"
+                onClick={handleExportSchedule}
+                className="gap-2"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <Download className="h-4 w-4" />
+              Export PNG
             </Button>
-            <span className="text-sm font-medium min-w-[200px] text-center">
-              {getWeekDateRange(weekOffset).range}
-            </span>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => setWeekOffset(weekOffset + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setWeekOffset(weekOffset - 1)}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium min-w-[200px] text-center">
+                {getWeekDateRange(weekOffset).range}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setWeekOffset(weekOffset + 1)}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -617,7 +667,7 @@ const WeeklySchedule = () => {
         </Card>
 
         <div className="bg-white">
-          <div className="overflow-x-auto h-full">
+          <div ref={scheduleRef} className="overflow-x-auto h-full">
             <div className="min-w-[900px]">
               {/* Header with days */}
               <div className="grid grid-cols-8 border-b bg-muted/30">
@@ -645,7 +695,7 @@ const WeeklySchedule = () => {
                         time={time}
                         isSelected={isSlotSelected(id, time)}
                         volunteers={getVolunteersForSlot(id, time)}
-                        disabled={!volunteerName.trim()}
+                        disabled={!volunteerName.trim() && !  isExportingPic}
                         onClick={() => handleSlotClick(id, time)}
                         weekOffset={weekOffset}
                       />
@@ -681,7 +731,7 @@ const WeeklySchedule = () => {
         <div className='w-full flex items-center justify-center'>
             <Badge className="text-center py-1 px-3" variant='outline'>
             <p className="text-sm text-muted-foreground">
-            Enter your name above to start selecting time slots
+            Enter volunteer name above to start selecting time slots
             </p>
         </Badge>
         </div>
