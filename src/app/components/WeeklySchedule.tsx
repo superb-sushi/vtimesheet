@@ -1,5 +1,5 @@
 "use client";
-import { act, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Timeslot from "./Timeslot";
@@ -64,10 +64,7 @@ function capitalize(str: string) {
 
 const WeeklySchedule = () => {
     
-  const [year, setYear] = useState<number>(0);
-  const [month, setMonth] = useState<number>(0);
-  const [date, setDate] = useState<number>(0);
-  const [day, setDay] = useState<number>(0);
+  // week navigation is handled with `weekOffset` and helpers below
 
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
   const [newSelectedSlots, setNewSelectedSlots] = useState<SelectedSlot[]>([]);
@@ -149,11 +146,7 @@ const WeeklySchedule = () => {
   }, [selectedSlots, weekOffset]);
 
   useEffect(() => {
-    const today: Date = new Date();
-    setYear(today.getFullYear());
-    setMonth(today.getMonth() + 1); 
-    setDate(today.getDate());
-    setDay(today.getDay());
+    // Initialize data on mount
     fetchTimeslots();
     fetchAllVolunteers();
   }, [])
@@ -190,11 +183,13 @@ const WeeklySchedule = () => {
 
   const handleChangeFirstName = (input: string) => {
     setVolunteerName("")
+    setVId(0);
     setVFirstName(input)
   }
 
   const handleChangeLastName = (input: string) => {
     setVolunteerName("")
+    setVId(0);
     setVLastName(input)
   }
 
@@ -250,14 +245,8 @@ const WeeklySchedule = () => {
       return;
     }
 
-    // 1. Compute the Sunday of the current week (weekOffset-aware)
-    const today = new Date();
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + (weekOffset * 7));
-
-    // 2. Compute the slot's actual date for the clicked index
-    const slotDate = new Date(startOfWeek);
-    slotDate.setDate(startOfWeek.getDate() + index); // 0–6
+    // compute slot date using helper
+    const slotDate = getSlotDate(index);
 
     // 3. Check if user already added this slot in new selections
     const existingNewSelectedSlot = newSelectedSlots.find(
@@ -311,21 +300,31 @@ const WeeklySchedule = () => {
     }
   };
 
+  const getStartOfWeek = (offset = weekOffset) => {
+    const today = new Date();
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay() + offset * 7);
+    sunday.setHours(0,0,0,0);
+    return sunday;
+  };
+
+  const getSlotDate = (index: number, offset = weekOffset) => {
+    const start = getStartOfWeek(offset);
+    const slot = new Date(start);
+    slot.setDate(start.getDate() + index);
+    slot.setHours(0,0,0,0);
+    return slot;
+  };
+
   const isSlotRegistered = (index: number, timeslot: string) => {
-    const base = new Date(year, month - 1, date);
-    base.setDate(base.getDate() + index - day);
-    const dd = base.getDate();
-    const slotDate = new Date(year, month - 1, dd);
+    const slotDate = getSlotDate(index);
     return selectedSlots.some(
       (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === timeslot
     );
   };
 
   const isSlotSelected = (index: number, timeslot: string) => {
-    const base = new Date(year, month - 1, date);
-    base.setDate(base.getDate() + index - day);
-    const dd = base.getDate();
-    const slotDate = new Date(year, month - 1, dd);
+    const slotDate = getSlotDate(index);
     return selectedSlots.some(
       (slot) => slot.date.toDateString() === slotDate.toDateString() && slot.timeslot === timeslot && slot.v_id === vId && slot.v_name.toLowerCase() === volunteerName.toLowerCase()
     );
@@ -339,24 +338,11 @@ const WeeklySchedule = () => {
   }
 
   const getVolunteersForSlot = (index: number, timeslot: string) => {
-    const today = new Date();
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + weekOffset * 7);
-
-    const slotDate = new Date(startOfWeek);
-    slotDate.setDate(startOfWeek.getDate() + index);
-
+    const slotDate = getSlotDate(index);
     const slotKey = formatDateLocal(slotDate);
-
     const allSlots = [...selectedSlots, ...newSelectedSlots];
 
-    return Array.from(
-      new Set(
-        allSlots
-          .filter(slot => slot.timeslot === timeslot && formatDateLocal(slot.date) === slotKey)
-          .map(slot => slot.v_name)
-      )
-    )
+    return Array.from(new Set(allSlots.filter(s => s.timeslot === timeslot && formatDateLocal(s.date) === slotKey).map(s => s.v_name)));
   };
 
 
@@ -404,6 +390,7 @@ const WeeklySchedule = () => {
         });
         if (!res.ok) {
           console.error('Failed to register timeslot:', res.status, res.statusText);
+          toast.error(`Failed to register timeslot (${date.toISOString().split("T")[0]} - ${time}). (Note that only registered members can have timeslots registered!)`)
         }
       } catch (err) {
         console.error('Error registering timeslot:', err);
@@ -652,7 +639,7 @@ const WeeklySchedule = () => {
                     </div>
                     {DAYS.map((d, id) => (
                       <Timeslot
-                        current_day={day}
+                        current_day={new Date().getDay()}
                         key={id}
                         day={d}
                         time={time}
@@ -660,6 +647,7 @@ const WeeklySchedule = () => {
                         volunteers={getVolunteersForSlot(id, time)}
                         disabled={!volunteerName.trim()}
                         onClick={() => handleSlotClick(id, time)}
+                        weekOffset={weekOffset}
                       />
                     ))}
                   </>
